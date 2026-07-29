@@ -8,7 +8,7 @@ export async function GET() {
     return NextResponse.redirect(new URL("/login", process.env.NEXTAUTH_URL));
   }
 
-  const redirectUri = `${process.env.NEXTAUTH_URL}/api/instagram/oauth/callback`;
+  const redirectUri = "https://igautodmtest.vercel.app/api/instagram/oauth/callback";
   const scope = [
     "instagram_business_basic",
     "instagram_business_manage_comments",

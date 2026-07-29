@@ -17,7 +17,7 @@ export async function GET(req: Request) {
     );
   }
 
-  const redirectUri = `${process.env.NEXTAUTH_URL}/api/instagram/oauth/callback`;
+  const redirectUri = "https://igautodmtest.vercel.app/api/instagram/oauth/callback";
   const appId = process.env.INSTAGRAM_APP_ID!;
   const appSecret = process.env.INSTAGRAM_APP_SECRET!;
 
