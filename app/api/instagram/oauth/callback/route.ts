@@ -21,8 +21,14 @@ export async function GET(req: Request) {
   const appId = process.env.INSTAGRAM_APP_ID!;
   const appSecret = process.env.INSTAGRAM_APP_SECRET!;
 
+  function fail(step: string, detail: any) {
+    const msg = encodeURIComponent(`${step}: ${JSON.stringify(detail)}`);
+    return NextResponse.redirect(
+      new URL(`/dashboard?error=oauth_failed&detail=${msg}`, process.env.NEXTAUTH_URL)
+    );
+  }
+
   try {
-    // Step 1: exchange code for a short-lived token
     const shortRes = await fetch("https://api.instagram.com/oauth/access_token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -37,9 +43,8 @@ export async function GET(req: Request) {
     const shortData = await shortRes.json();
     const shortToken = shortData.access_token;
     const igUserId = shortData.user_id;
-    if (!shortToken) throw new Error(JSON.stringify(shortData));
+    if (!shortToken) return fail("short_token", shortData);
 
-    // Step 2: exchange for a long-lived token (~60 days)
     const longRes = await fetch(
       `https://graph.instagram.com/access_token` +
         `?grant_type=ig_exchange_token` +
@@ -48,15 +53,14 @@ export async function GET(req: Request) {
     );
     const longData = await longRes.json();
     const longToken = longData.access_token;
-    if (!longToken) throw new Error(JSON.stringify(longData));
+    if (!longToken) return fail("long_token", longData);
 
-    // Step 3: get the username
     const meRes = await fetch(
       `https://graph.instagram.com/me?fields=id,username&access_token=${longToken}`
     );
     const meData = await meRes.json();
+    if (!meData.username) return fail("me_fetch", meData);
 
-    // Step 4: save it
     await prisma.instagramAccount.upsert({
       where: {
         userId_igUserId: { userId: (session.user as any).id, igUserId: String(igUserId) },
@@ -71,10 +75,7 @@ export async function GET(req: Request) {
     });
 
     return NextResponse.redirect(new URL("/dashboard?connected=1", process.env.NEXTAUTH_URL));
-  } catch (err) {
-    console.error("Instagram OAuth error", err);
-    return NextResponse.redirect(
-      new URL("/dashboard?error=oauth_failed", process.env.NEXTAUTH_URL)
-    );
+  } catch (err: any) {
+    return fail("exception", err.message || String(err));
   }
 }
