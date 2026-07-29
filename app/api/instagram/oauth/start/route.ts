@@ -10,14 +10,13 @@ export async function GET() {
 
   const redirectUri = `${process.env.NEXTAUTH_URL}/api/instagram/oauth/callback`;
   const scope = [
-    "instagram_basic",
-    "instagram_manage_comments",
-    "pages_show_list",
-    "pages_read_engagement",
+    "instagram_business_basic",
+    "instagram_business_manage_comments",
+    "instagram_business_manage_messages",
   ].join(",");
 
   const authUrl =
-    `https://www.facebook.com/v20.0/dialog/oauth` +
+    `https://www.instagram.com/oauth/authorize` +
     `?client_id=${process.env.INSTAGRAM_APP_ID}` +
     `&redirect_uri=${encodeURIComponent(redirectUri)}` +
     `&scope=${scope}` +

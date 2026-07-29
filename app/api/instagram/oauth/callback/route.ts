@@ -22,63 +22,51 @@ export async function GET(req: Request) {
   const appSecret = process.env.INSTAGRAM_APP_SECRET!;
 
   try {
-    // Step 1: exchange code for a short-lived user token
-    const shortRes = await fetch(
-      `https://graph.facebook.com/v20.0/oauth/access_token` +
-        `?client_id=${appId}` +
-        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-        `&client_secret=${appSecret}` +
-        `&code=${code}`
-    );
+    // Step 1: exchange code for a short-lived token
+    const shortRes = await fetch("https://api.instagram.com/oauth/access_token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: appId,
+        client_secret: appSecret,
+        grant_type: "authorization_code",
+        redirect_uri: redirectUri,
+        code,
+      }),
+    });
     const shortData = await shortRes.json();
-    if (!shortData.access_token) throw new Error(JSON.stringify(shortData));
+    const shortToken = shortData.access_token;
+    const igUserId = shortData.user_id;
+    if (!shortToken) throw new Error(JSON.stringify(shortData));
 
-    // Step 2: exchange for a long-lived user token (~60 days)
+    // Step 2: exchange for a long-lived token (~60 days)
     const longRes = await fetch(
-      `https://graph.facebook.com/v20.0/oauth/access_token` +
-        `?grant_type=fb_exchange_token` +
-        `&client_id=${appId}` +
+      `https://graph.instagram.com/access_token` +
+        `?grant_type=ig_exchange_token` +
         `&client_secret=${appSecret}` +
-        `&fb_exchange_token=${shortData.access_token}`
+        `&access_token=${shortToken}`
     );
     const longData = await longRes.json();
-    const userToken = longData.access_token;
-    if (!userToken) throw new Error(JSON.stringify(longData));
+    const longToken = longData.access_token;
+    if (!longToken) throw new Error(JSON.stringify(longData));
 
-    // Step 3: find the Facebook Page(s) this user manages
-    const pagesRes = await fetch(
-      `https://graph.facebook.com/v20.0/me/accounts?access_token=${userToken}`
+    // Step 3: get the username
+    const meRes = await fetch(
+      `https://graph.instagram.com/me?fields=id,username&access_token=${longToken}`
     );
-    const pagesData = await pagesRes.json();
-    const page = pagesData.data?.[0];
-    if (!page) throw new Error("No connected Facebook Page found.");
+    const meData = await meRes.json();
 
-    // Step 4: get the Instagram Business Account linked to that Page
-    const igRes = await fetch(
-      `https://graph.facebook.com/v20.0/${page.id}` +
-        `?fields=instagram_business_account&access_token=${page.access_token}`
-    );
-    const igData = await igRes.json();
-    const igAccountId = igData.instagram_business_account?.id;
-    if (!igAccountId) throw new Error("No Instagram Business account linked to this Page.");
-
-    // Step 5: get the Instagram username
-    const usernameRes = await fetch(
-      `https://graph.facebook.com/v20.0/${igAccountId}?fields=username&access_token=${page.access_token}`
-    );
-    const usernameData = await usernameRes.json();
-
-    // Step 6: save it — page.access_token doesn't expire while the Page exists
+    // Step 4: save it
     await prisma.instagramAccount.upsert({
       where: {
-        userId_igUserId: { userId: (session.user as any).id, igUserId: igAccountId },
+        userId_igUserId: { userId: (session.user as any).id, igUserId: String(igUserId) },
       },
-      update: { username: usernameData.username, accessToken: page.access_token },
+      update: { username: meData.username, accessToken: longToken },
       create: {
         userId: (session.user as any).id,
-        igUserId: igAccountId,
-        username: usernameData.username,
-        accessToken: page.access_token,
+        igUserId: String(igUserId),
+        username: meData.username,
+        accessToken: longToken,
       },
     });
 
