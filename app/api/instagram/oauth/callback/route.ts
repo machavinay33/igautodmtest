@@ -61,6 +61,23 @@ export async function GET(req: Request) {
     const meData = await meRes.json();
     if (!meData.username) return fail("me_fetch", meData);
 
+    // Subscribe this Instagram account to the app's webhooks —
+    // required or comment events will never be sent, even if the
+    // app-level "comments" field is toggled on in the Meta dashboard.
+    const subRes = await fetch(
+      `https://graph.instagram.com/v20.0/${igUserId}/subscribed_apps`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          subscribed_fields: "comments",
+          access_token: longToken,
+        }),
+      }
+    );
+    const subData = await subRes.json();
+    if (!subData.success) return fail("subscribe", subData);
+
     await prisma.instagramAccount.upsert({
       where: {
         userId_igUserId: { userId: (session.user as any).id, igUserId: String(igUserId) },
